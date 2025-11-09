@@ -1,0 +1,9 @@
+// Zellij configuration for zj-which-key background plugin
+
+load_plugins {
+    "file:./target/wasm32-wasip1/release/zj_which_key.wasm" {
+        auto_show_on_mode_change "true"
+        hide_in_base_mode "true"
+        max_lines "20"
+    }
+}

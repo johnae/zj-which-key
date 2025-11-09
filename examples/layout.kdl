@@ -1,0 +1,6 @@
+// Minimal layout - plugin loaded via config.kdl
+layout {
+    default_tab_template {
+        children
+    }
+}
