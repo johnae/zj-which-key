@@ -6,6 +6,8 @@ A Zellij plugin that shows you available keybindings for the current mode in a f
 
 Press Ctrl+p to enter Pane mode, and zj-which-key automatically shows you what keys are available. No more forgetting how to split panes or switch tabs.
 
+![zj-which-key in action](demo.gif)
+
 ## Features
 
 - **Mode-aware**: Shows only relevant keybindings for your current mode (Pane, Tab, Resize, etc.)
