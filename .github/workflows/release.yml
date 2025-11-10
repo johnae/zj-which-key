@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog generation
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            accept-flake-config = true
+
+      - name: Enable magic Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Build WASM plugin
+        run: nix build
+
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: git-cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: Read changelog
+        id: changelog
+        run: |
+          {
+            echo 'notes<<EOF'
+            cat CHANGELOG.md
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            ./result/share/zellij/plugins/zj_which_key.wasm \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "${{ steps.changelog.outputs.notes }}"
