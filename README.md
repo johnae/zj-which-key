@@ -2,7 +2,7 @@
   <img src="logo.png" alt="zj-which-key logo" width="200"/>
 </p>
 
-A Zellij plugin that shows you available keybindings for the current mode in a floating overlay. Inspired by which-key in Emacs/Vim.
+A Zellij plugin that shows you available keybindings for the current mode in a floating overlay. Sort of a standalone version of what comes with the built-in compact-bar. I use this with [zjstatus](https://github.com/dj95/zjstatus) but could be used without a bar at all for example.
 
 Press Ctrl+p to enter Pane mode, and zj-which-key automatically shows you what keys are available. No more forgetting how to split panes or switch tabs.
 
@@ -138,7 +138,7 @@ cargo watch -x 'build --release'
 Test with the example configuration:
 
 ```bash
-zellij --config examples/config.kdl --layout examples/compact.kdl
+zellij --config examples/config.kdl --layout examples/layout.kdl
 ```
 
 Check debug logs:
@@ -154,8 +154,7 @@ zj-which-key/
 ├── src/bin/zj_which_key.rs  # Main plugin code
 ├── examples/
 │   ├── config.kdl           # Example Zellij config
-│   ├── compact.kdl          # Example layout
-│   └── basic.kdl            # Legacy layout (old architecture)
+│   └── layout.kdl           # Example layout
 ├── .cargo/config.toml       # Sets default WASM target
 ├── devenv.nix               # devenv configuration
 └── Cargo.toml
