@@ -27,7 +27,7 @@ impl State {
             return; // Already visible
         }
 
-        eprintln!("zjstatus-which-key: Spawning overlay instance");
+        eprintln!("zj-which-key: Spawning overlay instance");
 
         let coordinates = self.calculate_coordinates();
         let mut config = BTreeMap::new();
@@ -55,7 +55,7 @@ impl State {
             return;
         }
 
-        eprintln!("zjstatus-which-key: Marking overlay as closed (it closes itself)");
+        eprintln!("zj-which-key: Marking overlay as closed (it closes itself)");
         self.overlay_visible = false;
         // Note: The overlay instance closes itself via close_self() when detecting base mode
     }
@@ -63,7 +63,7 @@ impl State {
     // Main instance: toggle overlay visibility
     fn toggle_overlay(&mut self) {
         eprintln!(
-            "zjstatus-which-key: Toggle called, overlay_visible={}",
+            "zj-which-key: Toggle called, overlay_visible={}",
             self.overlay_visible
         );
         if self.overlay_visible {
@@ -95,7 +95,7 @@ impl State {
         let y_position = terminal_rows.saturating_sub(height);
 
         eprintln!(
-            "zjstatus-which-key: Full-width coords x={}, y={}, width={} (terminal: {}x{})",
+            "zj-which-key: Full-width coords x={}, y={}, width={} (terminal: {}x{})",
             x_position, y_position, width, terminal_cols, terminal_rows
         );
 
@@ -142,7 +142,7 @@ impl State {
             .unwrap_or(20);
 
         eprintln!(
-            "zjstatus-which-key: Parsed config - is_overlay={}, auto_show={}, max_lines={}",
+            "zj-which-key: Parsed config - is_overlay={}, auto_show={}, max_lines={}",
             self.is_overlay, self.auto_show, self.max_lines
         );
     }
@@ -353,7 +353,7 @@ impl State {
         let keybinds = self.mode_info.get_mode_keybinds();
 
         eprintln!(
-            "zjstatus-which-key: Total keybindings for {:?} mode: {}",
+            "zj-which-key: Total keybindings for {:?} mode: {}",
             self.mode_info.mode,
             keybinds.len()
         );
@@ -376,7 +376,7 @@ impl State {
             .collect();
 
         eprintln!(
-            "zjstatus-which-key: After filtering: {} keybindings",
+            "zj-which-key: After filtering: {} keybindings",
             bindings.len()
         );
 
@@ -403,7 +403,7 @@ impl ZellijPlugin for State {
         self.own_plugin_id = Some(plugin_ids.plugin_id);
 
         eprintln!(
-            "zjstatus-which-key: Loading - is_overlay={}, plugin_id={}",
+            "zj-which-key: Loading - is_overlay={}, plugin_id={}",
             self.is_overlay, plugin_ids.plugin_id
         );
 
@@ -452,9 +452,7 @@ impl ZellijPlugin for State {
 
                     // Overlay closes itself when returning to base mode
                     if self.hide_in_base_mode && !was_base_mode && is_base_mode {
-                        eprintln!(
-                            "zjstatus-which-key: Overlay auto-closing (returned to base mode)"
-                        );
+                        eprintln!("zj-which-key: Overlay auto-closing (returned to base mode)");
                         close_self();
                         return false;
                     }
@@ -467,7 +465,7 @@ impl ZellijPlugin for State {
                     if matches!(key.bare_key, BareKey::Char('g'))
                         && key.has_modifiers(&[KeyModifier::Ctrl])
                     {
-                        eprintln!("zjstatus-which-key: Overlay closing via Ctrl+g");
+                        eprintln!("zj-which-key: Overlay closing via Ctrl+g");
                         close_self();
                     }
                     false
@@ -479,7 +477,7 @@ impl ZellijPlugin for State {
             // Main instance: handle spawning/closing overlay
             match event {
                 Event::PermissionRequestResult(PermissionStatus::Granted) => {
-                    eprintln!("zjstatus-which-key: Main instance permissions granted");
+                    eprintln!("zj-which-key: Main instance permissions granted");
                     self.permissions_granted = true;
                     false
                 }
@@ -492,12 +490,10 @@ impl ZellijPlugin for State {
                     // Auto-show/hide logic
                     if self.permissions_granted && self.auto_show {
                         if was_base_mode && !is_base_mode {
-                            eprintln!("zjstatus-which-key: Auto-spawning overlay (left base mode)");
+                            eprintln!("zj-which-key: Auto-spawning overlay (left base mode)");
                             self.spawn_overlay();
                         } else if !was_base_mode && is_base_mode && self.hide_in_base_mode {
-                            eprintln!(
-                                "zjstatus-which-key: Auto-closing overlay (returned to base mode)"
-                            );
+                            eprintln!("zj-which-key: Auto-closing overlay (returned to base mode)");
                             self.close_overlay();
                         }
                     }
@@ -512,7 +508,7 @@ impl ZellijPlugin for State {
                             self.display_area_rows = tab.display_area_rows;
                             self.display_area_cols = tab.display_area_columns;
                             eprintln!(
-                                "zjstatus-which-key: Terminal dimensions: {}x{}",
+                                "zj-which-key: Terminal dimensions: {}x{}",
                                 self.display_area_cols, self.display_area_rows
                             );
                             break;
@@ -527,7 +523,7 @@ impl ZellijPlugin for State {
                         && matches!(key.bare_key, BareKey::Char('g'))
                         && key.has_modifiers(&[KeyModifier::Ctrl])
                     {
-                        eprintln!("zjstatus-which-key: Ctrl+g detected - toggling overlay");
+                        eprintln!("zj-which-key: Ctrl+g detected - toggling overlay");
                         self.toggle_overlay();
                     }
                     false
