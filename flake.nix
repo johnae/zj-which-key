@@ -10,6 +10,7 @@
   };
 
   outputs = {
+    self,
     nixpkgs,
     rust-overlay,
   }: let
