@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
-use zellij_tile::prelude::*;
-use zellij_tile::prelude::actions::Action;
 use ansi_term::{Colour, Style};
+use std::collections::BTreeMap;
+use zellij_tile::prelude::actions::Action;
+use zellij_tile::prelude::*;
 
 #[derive(Default)]
 struct State {
@@ -16,8 +16,8 @@ struct State {
     display_area_rows: usize,
     display_area_cols: usize,
     // New fields for dual-mode operation
-    is_overlay: bool,          // True if this is the overlay instance
-    overlay_visible: bool,     // For main instance: track if overlay exists
+    is_overlay: bool,      // True if this is the overlay instance
+    overlay_visible: bool, // For main instance: track if overlay exists
 }
 
 impl State {
@@ -33,7 +33,10 @@ impl State {
         let mut config = BTreeMap::new();
         config.insert("is_overlay".to_string(), "true".to_string());
         config.insert("max_lines".to_string(), self.max_lines.to_string());
-        config.insert("hide_in_base_mode".to_string(), self.hide_in_base_mode.to_string());
+        config.insert(
+            "hide_in_base_mode".to_string(),
+            self.hide_in_base_mode.to_string(),
+        );
 
         let message = MessageToPlugin::new("spawn_overlay")
             .with_plugin_url("zellij:OWN_URL")
@@ -59,7 +62,10 @@ impl State {
 
     // Main instance: toggle overlay visibility
     fn toggle_overlay(&mut self) {
-        eprintln!("zjstatus-which-key: Toggle called, overlay_visible={}", self.overlay_visible);
+        eprintln!(
+            "zjstatus-which-key: Toggle called, overlay_visible={}",
+            self.overlay_visible
+        );
         if self.overlay_visible {
             self.close_overlay();
         } else {
@@ -88,8 +94,10 @@ impl State {
         let x_position = left_margin;
         let y_position = terminal_rows.saturating_sub(height);
 
-        eprintln!("zjstatus-which-key: Full-width coords x={}, y={}, width={} (terminal: {}x{})",
-                 x_position, y_position, width, terminal_cols, terminal_rows);
+        eprintln!(
+            "zjstatus-which-key: Full-width coords x={}, y={}, width={} (terminal: {}x{})",
+            x_position, y_position, width, terminal_cols, terminal_rows
+        );
 
         FloatingPaneCoordinates::new(
             Some(x_position.to_string()),
@@ -133,8 +141,10 @@ impl State {
             .and_then(|s| s.parse().ok())
             .unwrap_or(20);
 
-        eprintln!("zjstatus-which-key: Parsed config - is_overlay={}, auto_show={}, max_lines={}",
-                 self.is_overlay, self.auto_show, self.max_lines);
+        eprintln!(
+            "zjstatus-which-key: Parsed config - is_overlay={}, auto_show={}, max_lines={}",
+            self.is_overlay, self.auto_show, self.max_lines
+        );
     }
 
     fn format_key(&self, key: &KeyWithModifier) -> String {
@@ -196,12 +206,10 @@ impl State {
                 format!("Resize {:?}", resize)
             }
             Action::MoveFocus(direction) => format!("Focus {:?}", direction),
-            Action::NewPane(direction, ..) => {
-                match direction {
-                    Some(d) => format!("New pane {:?}", d),
-                    None => "New pane".to_string(),
-                }
-            }
+            Action::NewPane(direction, ..) => match direction {
+                Some(d) => format!("New pane {:?}", d),
+                None => "New pane".to_string(),
+            },
             Action::CloseFocus => "Close pane".to_string(),
             Action::NewTab(..) => "New tab".to_string(),
             Action::GoToTab(n) => format!("Tab {}", n),
@@ -227,22 +235,32 @@ impl State {
         }
     }
 
-
     fn is_mode_specific_action(&self, action: &Action) -> bool {
         match self.mode_info.mode {
-            InputMode::Pane => matches!(action,
-                Action::NewPane(..) | Action::CloseFocus | Action::MoveFocus(..) |
-                Action::Resize(..) | Action::ToggleFocusFullscreen | Action::ToggleFloatingPanes |
-                Action::TogglePaneFrames | Action::PaneNameInput(..)
+            InputMode::Pane => matches!(
+                action,
+                Action::NewPane(..)
+                    | Action::CloseFocus
+                    | Action::MoveFocus(..)
+                    | Action::Resize(..)
+                    | Action::ToggleFocusFullscreen
+                    | Action::ToggleFloatingPanes
+                    | Action::TogglePaneFrames
+                    | Action::PaneNameInput(..)
             ),
-            InputMode::Tab => matches!(action,
-                Action::NewTab(..) | Action::CloseTab | Action::GoToTab(..) |
-                Action::GoToNextTab | Action::GoToPreviousTab | Action::TabNameInput(..) |
-                Action::UndoRenameTab
+            InputMode::Tab => matches!(
+                action,
+                Action::NewTab(..)
+                    | Action::CloseTab
+                    | Action::GoToTab(..)
+                    | Action::GoToNextTab
+                    | Action::GoToPreviousTab
+                    | Action::TabNameInput(..)
+                    | Action::UndoRenameTab
             ),
             InputMode::Resize => matches!(action, Action::Resize(..)),
             InputMode::Move => matches!(action, Action::MoveFocus(..)),
-            InputMode::Scroll => true, // Show all for scroll mode
+            InputMode::Scroll => true,  // Show all for scroll mode
             InputMode::Session => true, // Show all for session mode
             _ => false,
         }
@@ -289,7 +307,9 @@ impl State {
                 Action::GoToNextTab | Action::GoToPreviousTab | Action::GoToTab(..) => 20,
 
                 // Toggles
-                Action::ToggleFocusFullscreen | Action::ToggleFloatingPanes | Action::TogglePaneFrames => 30,
+                Action::ToggleFocusFullscreen
+                | Action::ToggleFloatingPanes
+                | Action::TogglePaneFrames => 30,
 
                 // Naming
                 Action::PaneNameInput(..) | Action::TabNameInput(..) => 35,
@@ -332,7 +352,11 @@ impl State {
     fn get_keybindings(&self) -> Vec<(u8, String, String)> {
         let keybinds = self.mode_info.get_mode_keybinds();
 
-        eprintln!("zjstatus-which-key: Total keybindings for {:?} mode: {}", self.mode_info.mode, keybinds.len());
+        eprintln!(
+            "zjstatus-which-key: Total keybindings for {:?} mode: {}",
+            self.mode_info.mode,
+            keybinds.len()
+        );
 
         let mut bindings: Vec<_> = keybinds
             .iter()
@@ -341,19 +365,23 @@ impl State {
                 let action_str = self.format_action(actions);
                 let priority = self.action_priority(actions);
                 let should_show = self.should_show_action(actions);
-                eprintln!("  {} → {} (priority={}, show={})", key_str, action_str, priority, should_show);
+                eprintln!(
+                    "  {} → {} (priority={}, show={})",
+                    key_str, action_str, priority, should_show
+                );
                 (priority, key_str, action_str, should_show)
             })
             .filter(|(_, _, _, should_show)| *should_show)
             .map(|(p, k, a, _)| (p, k, a))
             .collect();
 
-        eprintln!("zjstatus-which-key: After filtering: {} keybindings", bindings.len());
+        eprintln!(
+            "zjstatus-which-key: After filtering: {} keybindings",
+            bindings.len()
+        );
 
         // Sort by priority, then by key string
-        bindings.sort_by(|a, b| {
-            a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1))
-        });
+        bindings.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
 
         // Deduplicate by action (keep first occurrence)
         let mut seen_actions = std::collections::HashSet::new();
@@ -374,8 +402,10 @@ impl ZellijPlugin for State {
         let plugin_ids = get_plugin_ids();
         self.own_plugin_id = Some(plugin_ids.plugin_id);
 
-        eprintln!("zjstatus-which-key: Loading - is_overlay={}, plugin_id={}",
-                 self.is_overlay, plugin_ids.plugin_id);
+        eprintln!(
+            "zjstatus-which-key: Loading - is_overlay={}, plugin_id={}",
+            self.is_overlay, plugin_ids.plugin_id
+        );
 
         if self.is_overlay {
             // Overlay instance: minimal setup
@@ -422,7 +452,9 @@ impl ZellijPlugin for State {
 
                     // Overlay closes itself when returning to base mode
                     if self.hide_in_base_mode && !was_base_mode && is_base_mode {
-                        eprintln!("zjstatus-which-key: Overlay auto-closing (returned to base mode)");
+                        eprintln!(
+                            "zjstatus-which-key: Overlay auto-closing (returned to base mode)"
+                        );
                         close_self();
                         return false;
                     }
@@ -432,7 +464,9 @@ impl ZellijPlugin for State {
 
                 Event::Key(key) => {
                     // Ctrl+g closes the overlay
-                    if matches!(key.bare_key, BareKey::Char('g')) && key.has_modifiers(&[KeyModifier::Ctrl]) {
+                    if matches!(key.bare_key, BareKey::Char('g'))
+                        && key.has_modifiers(&[KeyModifier::Ctrl])
+                    {
                         eprintln!("zjstatus-which-key: Overlay closing via Ctrl+g");
                         close_self();
                     }
@@ -477,8 +511,10 @@ impl ZellijPlugin for State {
                         if tab.active {
                             self.display_area_rows = tab.display_area_rows;
                             self.display_area_cols = tab.display_area_columns;
-                            eprintln!("zjstatus-which-key: Terminal dimensions: {}x{}",
-                                     self.display_area_cols, self.display_area_rows);
+                            eprintln!(
+                                "zjstatus-which-key: Terminal dimensions: {}x{}",
+                                self.display_area_cols, self.display_area_rows
+                            );
                             break;
                         }
                     }
@@ -488,7 +524,9 @@ impl ZellijPlugin for State {
                 Event::Key(key) => {
                     // Ctrl+g toggles overlay
                     if self.permissions_granted {
-                        if matches!(key.bare_key, BareKey::Char('g')) && key.has_modifiers(&[KeyModifier::Ctrl]) {
+                        if matches!(key.bare_key, BareKey::Char('g'))
+                            && key.has_modifiers(&[KeyModifier::Ctrl])
+                        {
                             eprintln!("zjstatus-which-key: Ctrl+g detected - toggling overlay");
                             self.toggle_overlay();
                         }
@@ -525,7 +563,13 @@ impl ZellijPlugin for State {
         let num_columns = (cols / column_width).max(1);
 
         // Header
-        println!("{} Mode", Style::new().bold().fg(fg).paint(format!("{:?}", self.mode_info.mode)));
+        println!(
+            "{} Mode",
+            Style::new()
+                .bold()
+                .fg(fg)
+                .paint(format!("{:?}", self.mode_info.mode))
+        );
         println!();
 
         let mut kb_index = 0;
@@ -563,7 +607,10 @@ impl ZellijPlugin for State {
 
                 // Highlight key badge
                 let key_badge = format!(" {} ", key);
-                print!("{}", Style::new().fg(key_fg).on(key_bg).bold().paint(&key_badge));
+                print!(
+                    "{}",
+                    Style::new().fg(key_fg).on(key_bg).bold().paint(&key_badge)
+                );
                 print!(" ");
 
                 // Color for action
@@ -583,7 +630,11 @@ impl ZellijPlugin for State {
                     action.to_string()
                 };
 
-                print!("{:<width$}", Style::new().fg(action_color).paint(&action_display), width = max_action_len);
+                print!(
+                    "{:<width$}",
+                    Style::new().fg(action_color).paint(&action_display),
+                    width = max_action_len
+                );
 
                 kb_index += 1;
 
@@ -598,7 +649,10 @@ impl ZellijPlugin for State {
         // Footer
         println!();
         print!("{}", Style::new().fg(fg).paint("Press "));
-        print!("{}", Style::new().fg(key_fg).on(key_bg).bold().paint(" Ctrl+g "));
+        print!(
+            "{}",
+            Style::new().fg(key_fg).on(key_bg).bold().paint(" Ctrl+g ")
+        );
         println!("{}", Style::new().fg(fg).paint(" to hide"));
     }
 }
