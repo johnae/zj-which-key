@@ -7,3 +7,6 @@ load_plugins {
         max_lines "20"
     }
 }
+
+show_startup_tips false
+show_release_notes false

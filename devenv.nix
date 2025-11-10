@@ -1,6 +1,11 @@
 {pkgs, ...}: {
   env.GREET = "zj-which-key";
-  packages = [pkgs.git pkgs.jujutsu];
+  packages = with pkgs; [
+    bashInteractive
+    git
+    jujutsu
+    vhs
+  ];
   languages.rust = {
     enable = true;
     channel = "stable";
