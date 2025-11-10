@@ -14,8 +14,7 @@ Press Ctrl+p to enter Pane mode, and zj-which-key automatically shows you what k
 - **Auto-show**: Appears when you enter a mode, disappears when you leave
 - **Full-width display**: Multi-column layout shows many keybindings at once
 - **Bottom-left positioning**: Out of the way but easy to see
-- **Clean styling**: Monochrome design that works with any Zellij theme
-- **Manual toggle**: Press Ctrl+g to show/hide anytime
+- **Basic styling**: Perhaps not the prettiest, but it should work with any Zellij theme
 
 ## Installation
 
