@@ -175,11 +175,11 @@ impl State {
             BareKey::End => result.push_str("End"),
             BareKey::PageUp => result.push_str("PgUp"),
             BareKey::PageDown => result.push_str("PgDn"),
-            BareKey::Up => result.push_str("↑"),
-            BareKey::Down => result.push_str("↓"),
-            BareKey::Left => result.push_str("←"),
-            BareKey::Right => result.push_str("→"),
-            _ => result.push_str("?"),
+            BareKey::Up => result.push('↑'),
+            BareKey::Down => result.push('↓'),
+            BareKey::Left => result.push('←'),
+            BareKey::Right => result.push('→'),
+            _ => result.push('?'),
         }
 
         result
@@ -494,11 +494,11 @@ impl ZellijPlugin for State {
                         if was_base_mode && !is_base_mode {
                             eprintln!("zjstatus-which-key: Auto-spawning overlay (left base mode)");
                             self.spawn_overlay();
-                        } else if !was_base_mode && is_base_mode {
-                            if self.hide_in_base_mode {
-                                eprintln!("zjstatus-which-key: Auto-closing overlay (returned to base mode)");
-                                self.close_overlay();
-                            }
+                        } else if !was_base_mode && is_base_mode && self.hide_in_base_mode {
+                            eprintln!(
+                                "zjstatus-which-key: Auto-closing overlay (returned to base mode)"
+                            );
+                            self.close_overlay();
                         }
                     }
 
@@ -523,13 +523,12 @@ impl ZellijPlugin for State {
 
                 Event::Key(key) => {
                     // Ctrl+g toggles overlay
-                    if self.permissions_granted {
-                        if matches!(key.bare_key, BareKey::Char('g'))
-                            && key.has_modifiers(&[KeyModifier::Ctrl])
-                        {
-                            eprintln!("zjstatus-which-key: Ctrl+g detected - toggling overlay");
-                            self.toggle_overlay();
-                        }
+                    if self.permissions_granted
+                        && matches!(key.bare_key, BareKey::Char('g'))
+                        && key.has_modifiers(&[KeyModifier::Ctrl])
+                    {
+                        eprintln!("zjstatus-which-key: Ctrl+g detected - toggling overlay");
+                        self.toggle_overlay();
                     }
                     false
                 }
