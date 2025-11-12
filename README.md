@@ -179,12 +179,6 @@ The plugin operates in two modes:
 
 This architecture allows proper positioning control, unlike using `show_self()`/`hide_self()` on layout-defined panes.
 
-## Known Issues
-
-- Requires approving `MessageAndLaunchOtherPlugins` permission on first run
-- Position coordinates use absolute values (may need adjustment for very small terminals)
-- Category headers shown only when first item in category is rendered
-
 ## Contributing
 
 Contributions welcome! Areas for improvement:
