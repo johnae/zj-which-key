@@ -24,7 +24,7 @@ Requires [Zellij](https://zellij.dev) 0.43+
 
 ```bash
 # Build and get the WASM plugin
-nix build github:yourusername/zj-which-key
+nix build github:johnae/zj-which-key
 
 # Plugin will be at:
 # result/share/zellij/plugins/zj_which_key.wasm
@@ -34,7 +34,7 @@ Or add to your flake inputs:
 
 ```nix
 {
-  inputs.zj-which-key.url = "github:yourusername/zj-which-key";
+  inputs.zj-which-key.url = "github:johnae/zj-which-key";
 
   # Then reference:
   # inputs.zj-which-key.packages.${system}.default
@@ -45,7 +45,7 @@ Or add to your flake inputs:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/zj-which-key
+git clone https://github.com/johnae/zj-which-key
 cd zj-which-key
 
 # Build the WASM plugin
