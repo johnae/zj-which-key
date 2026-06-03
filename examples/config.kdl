@@ -1,8 +1,13 @@
-// Zellij configuration for zj-which-key.
+// Example Zellij configuration for zj-which-key.
 //
 // The plugin is loaded once in the background as the "controller". It watches
 // for mode changes and, after a short idle delay, spawns the floating popup.
-// Run with:  zellij --config examples/config.kdl --layout examples/layout.kdl
+// A keybind launches the searchable browser as a separate focused instance.
+//
+// Run with:  zellij --config examples/config.kdl
+//
+// NOTE: Zellij can't show an approvable permission prompt for a background
+// plugin, so you must pre-grant permissions once (see the README, "Permissions").
 
 load_plugins {
     "file:./target/wasm32-wasip1/release/zj_which_key.wasm" {
@@ -14,6 +19,19 @@ load_plugins {
         position "bottom-right"
         // Cap the popup height at this percent of the screen; it pages beyond.
         max_height_pct "40"
+    }
+}
+
+keybinds {
+    shared_except "locked" {
+        // Open the searchable, all-modes keybinding browser.
+        // The `role "browser"` line must be a direct child of the plugin node.
+        bind "Ctrl y" {
+            LaunchOrFocusPlugin "file:./target/wasm32-wasip1/release/zj_which_key.wasm" {
+                floating true
+                role "browser"
+            }
+        }
     }
 }
 

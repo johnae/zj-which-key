@@ -2,192 +2,150 @@
   <img src="logo.png" alt="zj-which-key logo" width="200"/>
 </p>
 
-A Zellij plugin that shows you available keybindings for the current mode in a floating overlay. Sort of a standalone version of what comes with the built-in compact-bar. I use this with [zjstatus](https://github.com/dj95/zjstatus) but could be used without a bar at all for example.
+A Zellij plugin that shows the keybindings for your current mode in a small
+floating popup, a short moment after you enter the mode - like emacs which-key.
+Press a mode key (say `Ctrl+p` for Pane mode), pause, and a tucked-away corner
+popup reminds you how to split panes, resize, switch tabs, and so on. It pairs
+well with a custom status bar like [zjstatus](https://github.com/dj95/zjstatus),
+but works on its own too.
 
-Press Ctrl+p to enter Pane mode, and zj-which-key automatically shows you what keys are available. No more forgetting how to split panes or switch tabs.
+There's also a searchable browser (one keybind) that lists every binding across
+every mode, so you can fuzzy-find "how do I detach?" without leaving Zellij.
 
 ![zj-which-key in action](demo.gif)
 
-## Features
+## ✨ Features
 
-- **Mode-aware**: Shows only relevant keybindings for your current mode (Pane, Tab, Resize, etc.)
-- **Auto-show**: Appears when you enter a mode, disappears when you leave
-- **Full-width display**: Multi-column layout shows many keybindings at once
-- **Bottom-left positioning**: Out of the way but easy to see
-- **Basic styling**: Perhaps not the prettiest, but it should work with any Zellij theme
+- **Delayed, which-key style** - the popup only appears if you pause in a mode,
+  so it never nags when you already know the key.
+- **Mode-specific** - shows the keys that mode adds, grouped by action
+  (`h j k l ← ↓ ↑ →  Move focus`). Global keys live in the browser, not the popup.
+- **Floating, never in the way** - a content-sized box in a screen corner that
+  doesn't reflow your terminal, and vanishes when you return to the base mode.
+- **Searchable browser** - fuzzy-find across all modes, with a Global section for
+  keys that work everywhere.
+- **Theme-agnostic** - plain ANSI colors that sit fine on any Zellij theme.
 
-## Installation
+## Requirements
 
-Requires [Zellij](https://zellij.dev) 0.43+
+[Zellij](https://zellij.dev) 0.43+. You also need to **pre-approve the plugin's
+permissions** before first run - its UI can't receive the keystroke to grant them
+interactively. See [Permissions](#permissions).
 
-### With Nix Flakes
+## Install
+
+### With Nix flakes
 
 ```bash
-# Build and get the WASM plugin
 nix build github:johnae/zj-which-key
-
-# Plugin will be at:
-# result/share/zellij/plugins/zj_which_key.wasm
+# plugin ends up at: result/share/zellij/plugins/zj_which_key.wasm
 ```
 
-Or add to your flake inputs:
+Or as a flake input:
 
 ```nix
 {
   inputs.zj-which-key.url = "github:johnae/zj-which-key";
-
-  # Then reference:
-  # inputs.zj-which-key.packages.${system}.default
+  # reference: inputs.zj-which-key.packages.${system}.default
 }
 ```
 
-### Build from Source
+### From source
+
+You need the `wasm32-wasip1` Rust target (the included [devenv](https://devenv.sh)
+provides it):
 
 ```bash
-# Clone the repository
 git clone https://github.com/johnae/zj-which-key
 cd zj-which-key
-
-# Build the WASM plugin
 cargo build --release
-
-# The plugin will be at: target/wasm32-wasip1/release/zj_which_key.wasm
+# plugin at: target/wasm32-wasip1/release/zj_which_key.wasm
 ```
 
-### Setup with devenv
+## Configure
 
-This project uses devenv for development:
-
-```bash
-# devenv automatically provides Rust with wasm32-wasip1 target
-cargo build --release
-```
-
-## Usage
-
-### Quick Start
-
-Add to your Zellij configuration (`~/.config/zellij/config.kdl`):
+The plugin is loaded once in the background (the "controller"). It watches mode
+changes and spawns the popup; a keybind launches the browser. Add this to your
+`~/.config/zellij/config.kdl`, pointing at the built `.wasm`:
 
 ```kdl
 load_plugins {
     "file:/path/to/zj_which_key.wasm" {
-        auto_show_on_mode_change "true"
-        hide_in_base_mode "true"
-        max_lines "20"
+        auto_show "true"        // show the popup on entering a non-base mode
+        delay_secs "0.4"        // idle delay before it appears
+        position "bottom-right" // or "bottom-left"
+        max_height_pct "40"     // cap height at this % of the screen
+    }
+}
+
+keybinds {
+    shared_except "locked" {
+        bind "Ctrl y" {
+            LaunchOrFocusPlugin "file:/path/to/zj_which_key.wasm" {
+                floating true
+                role "browser" // must be a direct child, not under `configuration`
+            }
+        }
     }
 }
 ```
 
-Then start Zellij normally:
+In the browser: type to fuzzy-filter, `↑`/`↓` (or `Ctrl+n`/`Ctrl+p`) to scroll,
+`Esc` to close. It's a read-only reference - look up the key, close, press it.
+
+A ready-to-run example lives in [`examples/config.kdl`](examples/config.kdl):
 
 ```bash
-zellij
-```
-
-### Configuration Options
-
-- `auto_show_on_mode_change` (default: `"true"`): Automatically show overlay when entering non-normal modes
-- `hide_in_base_mode` (default: `"true"`): Automatically hide when returning to Normal mode
-- `max_lines` (default: `"20"`): Maximum number of keybindings to display
-
-### Keybindings
-
-- **Ctrl+g**: Toggle the overlay on/off manually
-- **Ctrl+p, Ctrl+t, etc.**: Entering any mode auto-shows the overlay (if configured)
-- **Esc**: Returning to Normal mode auto-hides the overlay (if configured)
-
-## How It Works
-
-zj-which-key uses a dual-instance architecture:
-
-1. **Main instance**: Runs in the background, listens for mode changes
-2. **Overlay instance**: Spawned as a floating pane when needed, positioned at bottom-left
-
-When you enter a mode like Pane (Ctrl+p), the main instance spawns a floating overlay showing:
-- Mode-specific keybindings (pane management, focus, resize)
-- Shared keybindings (return to Normal, quit)
-- Organized into categories for easy scanning
-
-The overlay automatically closes itself when you return to Normal mode or when you press Ctrl+g.
-
-## Development
-
-### Prerequisites
-
-- Rust with `wasm32-wasip1` target
-- Or use [devenv](https://devenv.sh) (configured in this repo)
-
-### Build Commands
-
-```bash
-# Development build
-cargo build
-
-# Release build (optimized)
 cargo build --release
-
-# Watch mode (requires cargo-watch)
-cargo watch -x 'build --release'
-
-# Output at:
-# target/wasm32-wasip1/release/zj_which_key.wasm
+zellij --config examples/config.kdl
 ```
 
-### Testing
+## Permissions
 
-Test with the example configuration:
+You must **pre-approve this plugin's permissions before first run.** Zellij
+normally grants permissions by asking you to press `y` in the plugin's pane - but
+neither of this plugin's UI panes can receive that keystroke. The popup is
+non-selectable (by design, so it never steals focus from your mode), and a
+background-loaded plugin can't show an approvable prompt at all
+([zellij #4982](https://github.com/zellij-org/zellij/issues/4982)). It's a known
+Zellij limitation, not something the plugin can work around - so the grant has to
+happen ahead of time, in Zellij's permissions cache.
 
-```bash
-zellij --config examples/config.kdl --layout examples/layout.kdl
+Add an entry to `permissions.kdl` (Linux: `~/.cache/zellij/permissions.kdl`,
+honoring `$XDG_CACHE_HOME`; macOS:
+`~/Library/Caches/org.Zellij-Contributors.Zellij/permissions.kdl`). The key is
+the plugin's absolute path with no `file:` prefix:
+
+```kdl
+"/path/to/zj_which_key.wasm" {
+    ReadApplicationState
+    ChangeApplicationState
+    MessageAndLaunchOtherPlugins
+}
 ```
 
-Check debug logs:
+One entry covers all three roles (permissions are keyed by path, not config). If
+you manage Zellij with Nix/home-manager, generate this file declaratively keyed
+by the plugin's store path and it just works across version bumps.
 
-```bash
-tail -f /tmp/zellij-*/zellij-log/zellij.log | grep "zj-which-key"
-```
+## How it works
 
-### Project Structure
+One wasm binary runs in three roles, selected by the `role` config key:
 
-```
-zj-which-key/
-├── src/bin/zj_which_key.rs  # Main plugin code
-├── examples/
-│   ├── config.kdl           # Example Zellij config
-│   └── layout.kdl           # Example layout
-├── .cargo/config.toml       # Sets default WASM target
-├── devenv.nix               # devenv configuration
-└── Cargo.toml
-```
-
-## Architecture
-
-The plugin operates in two modes:
-
-**Main Instance (Background)**:
-- Loaded via `load_plugins` in config.kdl
-- Monitors mode changes and key presses
-- Spawns overlay instances with specific coordinates
-- Tracks terminal dimensions via TabUpdate events
-
-**Overlay Instance (Floating)**:
-- Created programmatically via `pipe_message_to_plugin()`
-- Positioned at bottom-left with `FloatingPaneCoordinates`
-- Renders keybindings in multi-column layout
-- Closes itself autonomously when returning to base mode
-
-This architecture allows proper positioning control, unlike using `show_self()`/`hide_self()` on layout-defined panes.
+- **Controller** (background, via `load_plugins`) - has no pane. Watches mode
+  changes and, after the idle delay, spawns the popup. One per client, so
+  per-client mode state stays isolated.
+- **Popup** (spawned, floating, non-selectable) - renders the current mode's
+  keys in a corner and closes itself on the base mode.
+- **Browser** (launched by keybind, focused) - the searchable all-modes view.
 
 ## Contributing
 
-Contributions welcome! Areas for improvement:
+Issues and PRs welcome. Some known limitations and ideas:
 
-- Support for configurable toggle key (currently hardcoded to Ctrl+g)
-- Dynamic column width based on longest keybinding
-- Theme color integration (currently uses fixed colors)
-- Configurable positioning
-- Better action descriptions for complex keybindings
+- A plugin can't execute another binding's action, so the browser is lookup-only.
+- The popup's corner position is configurable; full layout control is not (yet).
+- Better human labels for unusual/custom actions.
 
 ## License
 
@@ -195,6 +153,5 @@ MIT
 
 ## Acknowledgments
 
-- Inspired by [which-key](https://github.com/justbur/emacs-which-key) for Emacs
-- Architecture based on [compact-bar](https://github.com/zellij-org/zellij/tree/main/default-plugins/compact-bar)'s tooltip system
-- Built for [Zellij](https://zellij.dev)
+- Inspired by [which-key](https://github.com/justbur/emacs-which-key) for Emacs.
+- Built for [Zellij](https://zellij.dev).
