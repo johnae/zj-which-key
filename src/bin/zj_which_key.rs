@@ -36,6 +36,8 @@ enum Role {
     #[default]
     Controller,
     Popup,
+    /// A focused, searchable view of every binding in every mode.
+    Browser,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -65,6 +67,11 @@ struct State {
     display_cols: usize,
     /// Popup: the last coordinates we asked for, to avoid redundant resizes.
     last_coords: Option<(usize, usize, usize, usize)>,
+
+    /// Browser: the current fuzzy-search query.
+    query: String,
+    /// Browser: index of the highlighted row in the filtered list.
+    selected: usize,
 }
 
 register_plugin!(State);
@@ -101,6 +108,17 @@ impl ZellijPlugin for State {
                     EventType::PermissionRequestResult,
                 ]);
             }
+            Role::Browser => {
+                request_permission(&[
+                    PermissionType::ReadApplicationState,
+                    PermissionType::ChangeApplicationState,
+                ]);
+                subscribe(&[
+                    EventType::ModeUpdate,
+                    EventType::Key,
+                    EventType::PermissionRequestResult,
+                ]);
+            }
         }
     }
 
@@ -108,14 +126,16 @@ impl ZellijPlugin for State {
         match self.role {
             Role::Popup => self.update_popup(event),
             Role::Controller => self.update_controller(event),
+            Role::Browser => self.update_browser(event),
         }
     }
 
     fn render(&mut self, rows: usize, cols: usize) {
-        if self.role != Role::Popup {
-            return;
+        match self.role {
+            Role::Popup => self.render_popup(rows, cols),
+            Role::Browser => self.render_browser(rows, cols),
+            Role::Controller => {}
         }
-        self.render_popup(rows, cols);
     }
 }
 
@@ -123,6 +143,7 @@ impl State {
     fn parse_config(&mut self, config: BTreeMap<String, String>) {
         self.role = match config.get("role").map(String::as_str) {
             Some("popup") => Role::Popup,
+            Some("browser") => Role::Browser,
             _ => Role::Controller,
         };
         self.position = match config.get("position").map(String::as_str) {
@@ -370,6 +391,221 @@ impl State {
             self.display_cols = tab.display_area_columns;
         }
     }
+
+    // ---- Browser -------------------------------------------------------------
+
+    fn update_browser(&mut self, event: Event) -> bool {
+        match event {
+            Event::PermissionRequestResult(PermissionStatus::Granted) => {
+                rename_plugin_pane(self.own_id, "which-key");
+                // Grow into a large centered box for comfortable browsing.
+                let coords = FloatingPaneCoordinates::default()
+                    .with_x_percent(10)
+                    .with_y_percent(10)
+                    .with_width_percent(80)
+                    .with_height_percent(80);
+                change_floating_panes_coordinates(vec![(PaneId::Plugin(self.own_id), coords)]);
+                false
+            }
+            Event::ModeUpdate(mode_info) => {
+                self.mode_info = mode_info;
+                true
+            }
+            Event::Key(key) => self.handle_browser_key(key),
+            _ => false,
+        }
+    }
+
+    fn handle_browser_key(&mut self, key: KeyWithModifier) -> bool {
+        let len = self.browser_rows().len();
+        let ctrl = key.has_modifiers(&[KeyModifier::Ctrl]);
+        match key.bare_key {
+            // The plugin API can't execute an arbitrary binding, so the browser
+            // is a read-only reference: look it up, close, press the key yourself.
+            BareKey::Esc | BareKey::Enter => {
+                close_self();
+                false
+            }
+            BareKey::Backspace => {
+                self.query.pop();
+                self.selected = 0;
+                true
+            }
+            BareKey::Char('u') if ctrl => {
+                self.query.clear();
+                self.selected = 0;
+                true
+            }
+            BareKey::Char('n') if ctrl => self.move_selection(Nav::Down, len),
+            BareKey::Char('p') if ctrl => self.move_selection(Nav::Up, len),
+            BareKey::Down => self.move_selection(Nav::Down, len),
+            BareKey::Up => self.move_selection(Nav::Up, len),
+            BareKey::Char(c) if !ctrl => {
+                self.query.push(c);
+                self.selected = 0;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn move_selection(&mut self, direction: Nav, len: usize) -> bool {
+        if len == 0 {
+            return false;
+        }
+        self.selected = match direction {
+            Nav::Up => self.selected.saturating_sub(1),
+            Nav::Down => (self.selected + 1).min(len - 1),
+        };
+        true
+    }
+
+    /// Every binding, fuzzy-filtered by the current query. Bindings that work
+    /// in every mode (i.e. are also in the base mode) are collapsed into a
+    /// single "Global" section instead of repeating once per mode.
+    fn browser_rows(&self) -> Vec<BrowserRow> {
+        let base = self.base_mode();
+        let base_binds = self.mode_info.get_keybinds_for_mode(base);
+        let globals: std::collections::HashSet<String> = base_binds
+            .iter()
+            .map(|(key, actions)| binding_signature(key, actions, base))
+            .collect();
+        let empty = std::collections::HashSet::new();
+
+        let mut rows: Vec<BrowserRow> = Vec::new();
+        let push = |rows: &mut Vec<BrowserRow>, mode: InputMode, global: bool, entry: Entry| {
+            let row = BrowserRow {
+                mode,
+                global,
+                score: 0,
+                entry,
+            };
+            let haystack = format!(
+                "{} {} {}",
+                row.mode_label(),
+                row.entry.keys_str(),
+                row.entry.label
+            );
+            if let Some(score) = fuzzy_match(&self.query, &haystack) {
+                rows.push(BrowserRow { score, ..row });
+            }
+        };
+
+        // Per-mode bindings with the globals filtered out.
+        for (mode, binds) in &self.mode_info.keybinds {
+            if *mode == base {
+                continue;
+            }
+            for entry in group_bindings(binds, *mode, base, &globals) {
+                push(&mut rows, *mode, false, entry);
+            }
+        }
+        // The globals, listed once.
+        for entry in group_bindings(&base_binds, base, base, &empty) {
+            push(&mut rows, base, true, entry);
+        }
+
+        let key = |r: &BrowserRow| (u8::from(r.global), mode_rank(r.mode));
+        if self.query.is_empty() {
+            rows.sort_by(|a, b| {
+                key(a)
+                    .cmp(&key(b))
+                    .then(a.entry.priority.cmp(&b.entry.priority))
+                    .then_with(|| a.entry.label.cmp(&b.entry.label))
+            });
+        } else {
+            // Best score first; on ties prefer mode-specific over global, then a
+            // more common mode (so "new pane" lands on Pane, not Tmux).
+            rows.sort_by(|a, b| {
+                b.score
+                    .cmp(&a.score)
+                    .then(key(a).cmp(&key(b)))
+                    .then_with(|| a.entry.label.cmp(&b.entry.label))
+            });
+        }
+        rows
+    }
+
+    fn render_browser(&mut self, rows: usize, cols: usize) {
+        let title = Colour::Fixed(252).bold();
+        let prompt = Colour::Fixed(75).bold();
+        let mode_style = Colour::Fixed(108).normal();
+        let keys_style = Colour::Fixed(75).normal();
+        let label_style = Colour::Fixed(250).normal();
+        let sel_bg = Colour::Fixed(238);
+        let dim = Colour::Fixed(244).normal();
+
+        let all = self.browser_rows();
+
+        // Column widths across the visible set.
+        let mode_col = all
+            .iter()
+            .map(|r| display_width(&r.mode_label()))
+            .max()
+            .unwrap_or(0)
+            .clamp(1, 10);
+        let keys_col = all
+            .iter()
+            .map(|r| display_width(&r.entry.keys_str()))
+            .max()
+            .unwrap_or(0)
+            .clamp(1, 22);
+        let label_col = cols.saturating_sub(mode_col + keys_col + 4).max(1);
+
+        // Reserve a header row, a blank, and a footer; scroll the body so the
+        // selection stays visible.
+        let body = rows.saturating_sub(3).max(1);
+        let start = self
+            .selected
+            .saturating_sub(body - 1)
+            .min(all.len().saturating_sub(body));
+
+        let mut lines: Vec<String> = Vec::with_capacity(rows);
+        lines.push(format!(
+            "{} {}",
+            prompt.paint("Search:"),
+            title.paint(format!("{}\u{2588}", self.query))
+        ));
+        lines.push(String::new());
+
+        for (i, row) in all.iter().enumerate().skip(start).take(body) {
+            let mode = pad_right(&row.mode_label(), mode_col);
+            let keys = pad_right(
+                &truncate_to_width(&row.entry.keys_str(), keys_col),
+                keys_col,
+            );
+            let label = truncate_to_width(&row.entry.label, label_col);
+            lines.push(if i == self.selected {
+                let line = format!("{} {}  {}", mode, keys, label);
+                label_style
+                    .on(sel_bg)
+                    .paint(pad_right(&line, cols.saturating_sub(1)))
+                    .to_string()
+            } else {
+                format!(
+                    "{} {}  {}",
+                    mode_style.paint(mode),
+                    keys_style.paint(keys),
+                    label_style.paint(label)
+                )
+            });
+        }
+
+        let shown = body.min(all.len().saturating_sub(start));
+        let footer = dim
+            .paint(format!(
+                "{}/{} · type to filter · ↑↓ scroll · Esc close",
+                shown,
+                all.len()
+            ))
+            .to_string();
+
+        // Pin the footer last and never emit more than `rows` lines, with no
+        // trailing newline (a final newline would scroll the header off the top).
+        lines.truncate(rows.saturating_sub(1));
+        lines.push(footer);
+        print!("{}", lines.join("\n"));
+    }
 }
 
 /// One row of the popup: every key bound to a single action, plus its label.
@@ -382,6 +618,78 @@ struct Entry {
 impl Entry {
     fn keys_str(&self) -> String {
         self.keys.join(" ")
+    }
+}
+
+/// One row of the browser: an `Entry` tagged with its mode and search score.
+/// `global` marks a binding that works in every mode (shown under "Global").
+struct BrowserRow {
+    mode: InputMode,
+    global: bool,
+    score: i32,
+    entry: Entry,
+}
+
+impl BrowserRow {
+    fn mode_label(&self) -> String {
+        if self.global {
+            "Global".to_string()
+        } else {
+            format!("{:?}", self.mode)
+        }
+    }
+}
+
+/// Direction the browser selection moves on an arrow / Ctrl-n / Ctrl-p key.
+/// (Named `Nav` to avoid shadowing `zellij_tile::prelude::Direction`.)
+enum Nav {
+    Up,
+    Down,
+}
+
+/// Display order for modes in the browser, base mode last.
+fn mode_rank(mode: InputMode) -> u8 {
+    match mode {
+        InputMode::Pane => 0,
+        InputMode::Tab => 1,
+        InputMode::Resize => 2,
+        InputMode::Move => 3,
+        InputMode::Scroll | InputMode::Search | InputMode::EnterSearch => 4,
+        InputMode::Session => 5,
+        InputMode::RenamePane | InputMode::RenameTab => 6,
+        InputMode::Normal | InputMode::Locked => 9,
+        _ => 7,
+    }
+}
+
+/// Case-insensitive subsequence fuzzy match. Returns `None` if `query`'s chars
+/// don't all appear in order; otherwise a score that rewards contiguous runs
+/// and matches at word boundaries. An empty query matches everything (score 0).
+fn fuzzy_match(query: &str, text: &str) -> Option<i32> {
+    if query.is_empty() {
+        return Some(0);
+    }
+    let mut q = query.chars().map(|c| c.to_ascii_lowercase()).peekable();
+    let mut score = 0i32;
+    let mut run = 0i32;
+    let mut prev_boundary = true;
+    let mut next = q.next();
+    for th in text.chars() {
+        let Some(qc) = next else { break };
+        let boundary = matches!(th, ' ' | '+' | '-' | '_' | '(');
+        if th.to_ascii_lowercase() == qc {
+            score += 1 + run * 2 + if prev_boundary { 3 } else { 0 };
+            run += 1;
+            next = q.next();
+        } else {
+            run = 0;
+        }
+        prev_boundary = boundary;
+    }
+    if next.is_none() && q.peek().is_none() {
+        Some(score)
+    } else {
+        None
     }
 }
 
@@ -626,6 +934,7 @@ fn format_action(actions: &[Action], base_mode: InputMode) -> String {
         Action::EditScrollback => "Edit scrollback".to_string(),
         Action::Detach => "Detach".to_string(),
         Action::Run(..) => "Run command".to_string(),
+        Action::LaunchOrFocusPlugin(..) | Action::LaunchPlugin(..) => "Launch plugin".to_string(),
         Action::SwitchFocus => "Switch focus".to_string(),
         Action::MoveTab(d) => format!("Move tab {:?}", d),
         Action::NewStackedPane(..) => "New stacked pane".to_string(),
@@ -757,5 +1066,37 @@ mod tests {
     #[test]
     fn keys_string_joins_with_spaces() {
         assert_eq!(entry(&["h", "←"], "Focus Left").keys_str(), "h ←");
+    }
+
+    #[test]
+    fn fuzzy_empty_query_matches_anything() {
+        assert_eq!(fuzzy_match("", "whatever"), Some(0));
+    }
+
+    #[test]
+    fn fuzzy_requires_all_chars_in_order() {
+        assert!(fuzzy_match("pane", "Pane New pane").is_some());
+        assert!(fuzzy_match("enap", "Pane New pane").is_none()); // wrong order
+        assert!(fuzzy_match("xyz", "Pane New pane").is_none());
+    }
+
+    #[test]
+    fn fuzzy_is_case_insensitive() {
+        assert!(fuzzy_match("PANE", "new pane").is_some());
+        assert!(fuzzy_match("pane", "NEW PANE").is_some());
+    }
+
+    #[test]
+    fn fuzzy_prefers_contiguous_and_boundary_matches() {
+        // Contiguous "pane" should outscore a scattered p-a-n-e.
+        let contiguous = fuzzy_match("pane", "Pane mode").unwrap();
+        let scattered = fuzzy_match("pane", "previous another name extra").unwrap();
+        assert!(contiguous > scattered);
+    }
+
+    #[test]
+    fn fuzzy_subsequence_across_words() {
+        // "np" matches New_Pane via the two word starts.
+        assert!(fuzzy_match("np", "New pane").is_some());
     }
 }
